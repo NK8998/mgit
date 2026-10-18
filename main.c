@@ -12,7 +12,6 @@
 //run add -> we stage the files in the working dir
 //run commit -> we create a local snapshot of the files in the object store
 
-#define MAX_PATH_SIZE 1024
 #define get_current_dir getcwd
 
 
@@ -32,39 +31,58 @@ void status()
 
 }
 
+void make_dir(const char *path)
+{
+    if(mkdir(path, 0777))
+    {
+        
+        if(errno == EEXIST)
+        {
+            printf("\nThis is path already exists\n");
+        }
+        else
+        {
+            printf("\nFailed to create path\n");
+        }
+
+    }
+}
+
+void check_if_is_mgit_repo()
+{
+
+}
+
 void init()
 {
     //make a .mgit dir.
     //output, initialized an empty git repo <the absolute path of the repo>
     //get working dir and create a .mgit dir in it.
-    printf("we are initing vro\n");
 
-    char working_dir[MAX_PATH_SIZE];
+    char working_dir[128];
 
     if(get_current_dir(working_dir, sizeof(working_dir)) == NULL)
     {
         perror("Failed to get current working directory");
-    }
-    
-    if(mkdir(".mgit", 0777) == 0)
+    }else
     {
-        printf("Initialized an empty mgit repository in ");
-        printf("%s/.mgit\n", working_dir);
-    }
-    else
-    {
-        
-        if(errno == EEXIST)
-        {
-            printf("\nThis is already an mgit repository\n");
-        }
-        else
-        {
-            printf("\nFailed to initialize the repository\n");
-        }
+        char mgit_dir[200];
+        char objects_dir[256];
+        char hooks_dir[256];
+
+        snprintf(mgit_dir, sizeof(mgit_dir), "%s/.mgit", working_dir);
+        make_dir(mgit_dir);
+
+        snprintf(objects_dir, sizeof(objects_dir), "%s/objects", mgit_dir);
+        make_dir(objects_dir);
+
+        snprintf(hooks_dir, sizeof(hooks_dir), "%s/hooks", mgit_dir);
+        make_dir(hooks_dir);
+
+        printf("Initialized an empty mgit repository in %s\n", mgit_dir);
 
     }
-        
+
 }
 
 /*
