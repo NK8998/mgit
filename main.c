@@ -14,6 +14,9 @@
 
 #define get_current_dir getcwd
 
+char* check_mgit_repo(char* mgit_dir_buff, size_t m_size, char* work_dir_buff, size_t w_size);
+void make_dir(const char *path);
+
 
 void commit() 
 {
@@ -28,6 +31,19 @@ void add()
 void status()
 {
     //check if we are in a mgit repo already!!
+    //list the status info like branch(assume main for now), list of uncommited files
+    char work_dir_buff[128];
+    char mgit_dir_buff[256];
+
+    if(!check_mgit_repo(mgit_dir_buff, sizeof(mgit_dir_buff), work_dir_buff, sizeof(work_dir_buff)))
+    {
+        printf("Not a mgit repo\n");
+        return;
+    }
+
+    printf("On branch main\n");
+
+
 
 }
 
@@ -48,9 +64,29 @@ void make_dir(const char *path)
     }
 }
 
-void check_if_is_mgit_repo()
+
+char* check_mgit_repo(char* mgit_dir_buff, size_t m_size, char* work_dir_buff, size_t w_size)
 {
 
+    if(get_current_dir(work_dir_buff, w_size) == NULL)
+    {
+        perror("Failed to get current working directory");
+        return NULL;
+    }
+    
+    snprintf(mgit_dir_buff, m_size, "%s/.mgit", work_dir_buff);
+
+    struct stat info;
+
+    if(stat(mgit_dir_buff, &info) != 0){
+        return NULL;
+    }
+
+    if(S_ISDIR(info.st_mode)){
+        return mgit_dir_buff;
+    }
+    
+    return NULL;
 }
 
 void init()
