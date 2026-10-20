@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <dirent.h>
 
 //LOCAL FIRST
 //run git init -> we initialize a repo. create a .mgit folder
@@ -16,7 +17,7 @@
 
 char* check_mgit_repo(char* mgit_dir_buff, size_t m_size, char* work_dir_buff, size_t w_size);
 void make_dir(const char *path);
-
+void clean_up();
 
 void commit() 
 {
@@ -27,6 +28,17 @@ void commit()
 void add()
 {
     //check if we are in a mgit repo already!!
+    char work_dir_buff[128];
+    char mgit_dir_buff[256];
+
+    if(!check_mgit_repo(mgit_dir_buff, sizeof(mgit_dir_buff), work_dir_buff, sizeof(work_dir_buff)))
+    {
+        printf("Not a mgit repo\n");
+        return;
+    }
+
+
+    
 }
 void status()
 {
@@ -42,6 +54,12 @@ void status()
     }
 
     printf("On branch main\n");
+
+    //list files in working tree frist
+    
+    //This should hash the files and store the hashes in 
+
+
 
 
 
@@ -62,6 +80,22 @@ void make_dir(const char *path)
         }
 
     }
+}
+
+void make_file(const char *path, const char *content){
+
+        FILE *fptr;
+        fptr = fopen(path, "w");
+
+        if(fptr == NULL){
+            printf("Error opening the file\n");
+            clean_up();
+            return;
+        }
+
+        fprintf(fptr, "%s", content);
+        fclose(fptr);
+
 }
 
 
@@ -89,11 +123,17 @@ char* check_mgit_repo(char* mgit_dir_buff, size_t m_size, char* work_dir_buff, s
     return NULL;
 }
 
+void clean_up(){
+
+
+}
+
 void init()
 {
     //make a .mgit dir.
     //output, initialized an empty git repo <the absolute path of the repo>
     //get working dir and create a .mgit dir in it.
+    //create objects/ and HEAD file in .mgit
 
     char working_dir[128];
 
@@ -102,9 +142,12 @@ void init()
         perror("Failed to get current working directory");
     }else
     {
-        char mgit_dir[200];
-        char objects_dir[256];
-        char hooks_dir[256];
+        char mgit_dir[150];
+        char objects_dir[180];
+        char refs_dir[180];
+        char heads_dir[200];
+        char HEAD_path[250];
+        char main_path[250];
 
         snprintf(mgit_dir, sizeof(mgit_dir), "%s/.mgit", working_dir);
         make_dir(mgit_dir);
@@ -112,8 +155,19 @@ void init()
         snprintf(objects_dir, sizeof(objects_dir), "%s/objects", mgit_dir);
         make_dir(objects_dir);
 
-        snprintf(hooks_dir, sizeof(hooks_dir), "%s/hooks", mgit_dir);
-        make_dir(hooks_dir);
+        snprintf(refs_dir, sizeof(refs_dir), "%s/refs", mgit_dir);
+        make_dir(refs_dir);
+
+        snprintf(HEAD_path, sizeof(HEAD_path), "%s/%s", mgit_dir, "HEAD");
+
+        make_file(HEAD_path, "ref: refs/heads/main");
+
+        snprintf(heads_dir, sizeof(heads_dir), "%s/heads", refs_dir);
+        make_dir(heads_dir);
+
+        snprintf(main_path, sizeof(main_path), "%s/%s", heads_dir, "main");
+        
+        make_file(main_path, "no commit yet");
 
         printf("Initialized an empty mgit repository in %s\n", mgit_dir);
 
