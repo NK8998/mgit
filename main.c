@@ -57,7 +57,7 @@ void add(const char *file_path)
     char buffer[256];
 
     while(fgets(buffer, sizeof(buffer), f_stream) != NULL){
-        //Check need to grab the file name
+        //Check  need to grab the file name
         struct Split_Parts parts;
         char part[128];
                         
