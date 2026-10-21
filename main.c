@@ -19,13 +19,18 @@ char* check_mgit_repo(char* mgit_dir_buff, size_t m_size, char* work_dir_buff, s
 void make_dir(const char *path);
 void clean_up();
 
+struct Split_Parts {
+    char filename[256];
+    char hash[256];
+};
+
 void commit() 
 {
     //check if we are in a mgit repo already!!
 
 }
 
-void add()
+void add(const char *file_path)
 {
     //check if we are in a mgit repo already!!
     char work_dir_buff[128];
@@ -37,8 +42,49 @@ void add()
         return;
     }
 
+  
+    //Check if we have the files in the index first
+    //This should hash the files and store the hashes, filename and permissions in the index
 
-    
+    FILE *f_stream;
+    f_stream = fopen("./.mgit/index", "r");
+
+    if(f_stream == NULL){
+        perror("Error opening file");
+        return;
+    }
+
+    char buffer[256];
+
+    while(fgets(buffer, sizeof(buffer), f_stream) != NULL){
+        //Check need to grab the file name
+        struct Split_Parts parts;
+        char part[128];
+                        
+        int i = 0;
+        int part_idx = 0;
+        
+        while(buffer[i] != '\n'){
+            if(buffer[i] == '\t'){
+                snprintf(parts.filename, sizeof(parts.filename), "%s", part);
+                part_idx = 0;
+            }else{
+                part[part_idx] = buffer[i];
+                part_idx++;
+                part[part_idx] = '\0';
+            }
+            
+            i++;
+        }
+
+        snprintf(parts.hash, sizeof(parts.hash), "%s", part);
+
+        printf("name: %s\n", parts.filename);
+        printf("hash: %s\n", parts.hash);
+    }
+
+    fclose(f_stream);
+    //want to read this line by line
 }
 void status()
 {
@@ -55,9 +101,6 @@ void status()
 
     printf("On branch main\n");
 
-    //list files in working tree frist
-    
-    //This should hash the files and store the hashes in 
 
 
 
@@ -135,43 +178,45 @@ void init()
     //get working dir and create a .mgit dir in it.
     //create objects/ and HEAD file in .mgit
 
-    char working_dir[128];
+    char work_dir[128];
+    char mgit_dir[150];
 
-    if(get_current_dir(working_dir, sizeof(working_dir)) == NULL)
+    if(check_mgit_repo(mgit_dir, sizeof(mgit_dir), work_dir, sizeof(work_dir)))
     {
-        perror("Failed to get current working directory");
-    }else
-    {
-        char mgit_dir[150];
-        char objects_dir[180];
-        char refs_dir[180];
-        char heads_dir[200];
-        char HEAD_path[250];
-        char main_path[250];
-
-        snprintf(mgit_dir, sizeof(mgit_dir), "%s/.mgit", working_dir);
-        make_dir(mgit_dir);
-
-        snprintf(objects_dir, sizeof(objects_dir), "%s/objects", mgit_dir);
-        make_dir(objects_dir);
-
-        snprintf(refs_dir, sizeof(refs_dir), "%s/refs", mgit_dir);
-        make_dir(refs_dir);
-
-        snprintf(HEAD_path, sizeof(HEAD_path), "%s/%s", mgit_dir, "HEAD");
-
-        make_file(HEAD_path, "ref: refs/heads/main");
-
-        snprintf(heads_dir, sizeof(heads_dir), "%s/heads", refs_dir);
-        make_dir(heads_dir);
-
-        snprintf(main_path, sizeof(main_path), "%s/%s", heads_dir, "main");
-        
-        make_file(main_path, "no commit yet");
-
-        printf("Initialized an empty mgit repository in %s\n", mgit_dir);
-
+        printf("This is a mgit repo. Try this in a different directory\n");
+        return;
     }
+    
+    char objects_dir[180];
+    char refs_dir[180];
+    char heads_dir[200];
+    char HEAD_path[250];
+    char index_path[250];
+    char main_path[250];
+
+    snprintf(mgit_dir, sizeof(mgit_dir), "%s/.mgit", work_dir);
+    make_dir(mgit_dir);
+
+    snprintf(objects_dir, sizeof(objects_dir), "%s/objects", mgit_dir);
+    make_dir(objects_dir);
+
+    snprintf(refs_dir, sizeof(refs_dir), "%s/refs", mgit_dir);
+    make_dir(refs_dir);
+
+    snprintf(index_path, sizeof(index_path), "%s/%s", mgit_dir, "index");
+    make_file(index_path, "");
+
+    snprintf(HEAD_path, sizeof(HEAD_path), "%s/%s", mgit_dir, "HEAD");
+    make_file(HEAD_path, "ref: refs/heads/main");
+
+    snprintf(heads_dir, sizeof(heads_dir), "%s/heads", refs_dir);
+    make_dir(heads_dir);
+
+    snprintf(main_path, sizeof(main_path), "%s/%s", heads_dir, "main");
+    
+    make_file(main_path, "no commit yet");
+
+    printf("Initialized an empty mgit repository in %s\n", mgit_dir);
 
 }
 
@@ -202,12 +247,12 @@ void default_message(){
 
 }
 
-void parse_args(const char *command){
+void parse_args(const char *command, const char* sub_command){
 
     if(strcmp(command, "init") == 0){
         init();
     }else if(strcmp(command, "add") == 0){
-        add();
+        add(sub_command);
     }else if(strcmp(command, "commit") == 0){
         commit();
     }else if(strcmp(command, "status") == 0){
@@ -222,7 +267,7 @@ int main(int argc, char *argv[]){
 
    
     if(argc > 1){
-        parse_args(argv[1]);
+        parse_args(argv[1], argv[2]);
     }
     
 }
