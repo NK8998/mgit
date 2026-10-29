@@ -16,6 +16,7 @@
 //run commit -> we create a local snapshot of the files in the object store
 
 #define get_current_dir getcwd
+#define CHUNK_SIZE 64
 
 char* check_mgit_repo(char* mgit_dir_buff, size_t m_size, char* work_dir_buff, size_t w_size);
 void make_dir(const char *path);
@@ -57,7 +58,28 @@ void commit()
 
 void hash_file(const char *path, char *h_buffer, size_t h_size)
 {
-    //pre-processing
+    //pre-processing - chunks of 512
+    FILE *f_stream = fopen(path, "ab");
+
+    if(f_stream == NULL){
+        perror("Error opening file");
+        return;
+    }
+
+    uint8_t schedule_array[CHUNK_SIZE] = {0};
+    size_t bytes_read;
+    
+    while((bytes_read == fread(schedule_array, 1, CHUNK_SIZE, f_stream)) > 0){
+
+        if(bytes_read == CHUNK_SIZE){
+            printf("hashing dis bih");
+        }else{
+
+        }
+        
+    }
+
+    fclose(f_stream);
    
 }
 
@@ -75,7 +97,7 @@ void add(const char *file_path)
     }
 
   
-    //Check if we have the files in the index first
+    //Check if we have the files in the index first 
     //This should hash the files and store the hashes, filename and permissions in the index
 
     FILE *f_stream;
@@ -96,7 +118,7 @@ void add(const char *file_path)
         int i = 0;
         int part_idx = 0;
         
-        while(buffer[i] != '\n'){
+        while(buffer[i]){
             if(buffer[i] == '\t'){
                 snprintf(parts.filename, sizeof(parts.filename), "%s", part);
                 part_idx = 0;
@@ -128,6 +150,8 @@ void add(const char *file_path)
 
     //file not in index
     //proceed with hashing, updating index and storing in object store
+    char hash_buffer[512];
+    hash_file(file_path, hash_buffer, sizeof(hash_buffer));
 
 
     fclose(f_stream);
