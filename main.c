@@ -22,29 +22,6 @@ char* check_mgit_repo(char* mgit_dir_buff, size_t m_size, char* work_dir_buff, s
 void make_dir(const char *path);
 void clean_up();
 
-//Initialize hash values:
-uint32_t hex_val_8[8] = {
-    0x6a09e667,
-    0xbb67ae85,
-    0x3c6ef372,
-    0xa54ff53a,
-    0x510e527f,
-    0x9b05688c,
-    0x1f83d9ab,
-    0x5be0cd19
-};
-
-uint32_t round_constants[64] = {
-    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
-};
-
 struct Split_Parts {
     char filename[256];
     char hash[256];
@@ -55,34 +32,139 @@ void commit()
     //check if we are in a mgit repo already!!
 
 }
+ 
+uint32_t rotate(uint32_t word_32_bit, int n, int direction){
+    //right
+    if(direction){    
+        return word_32_bit >> n | word_32_bit << (32 - n);
+    }else{
+        
+        return word_32_bit << n | word_32_bit >> (32 - n);
+
+    }    
+}
+
+void process_message(uint32_t hex_val[8], uint32_t round_constants[64], uint8_t chunk_512[CHUNK_SIZE]){
+
+    uint32_t schedule_array[CHUNK_SIZE] = {0};
+    int k = 0;
+    for(int i = 0; i < CHUNK_SIZE;){
+        //Ensure little endian
+        schedule_array[k] = ((uint32_t)chunk_512[i] << 24) |
+                                    ((uint32_t)chunk_512[i + 1] << 16) | 
+                                    ((uint32_t)chunk_512[i + 2] << 8) | 
+                                    ((uint32_t)chunk_512[i + 3] << 0);
+        i += 4;
+        k += 1; 
+    }
+		    
+    for(int i = 16; i < 64; i++){     
+        uint32_t s0 =  rotate(schedule_array[i - 15], 7, 1) ^  rotate(schedule_array[i - 15], 18, 1) ^ schedule_array[1 - 15] >> 3;
+        uint32_t s1 =  rotate(schedule_array[i - 2], 17, 1) ^ rotate(schedule_array[i - 2], 19, 1) ^  schedule_array[i - 2] >> 10;
+        schedule_array[i] = schedule_array[i - 16] + s0 + round_constants[i - 7] + s1;  
+                  
+    } 
+
+        
+    uint32_t a = hex_val[0];
+    uint32_t b = hex_val[1];
+    uint32_t c = hex_val[2];
+    uint32_t d = hex_val[3];
+    uint32_t e = hex_val[4];
+    uint32_t f = hex_val[5];
+    uint32_t g = hex_val[6];
+    uint32_t h = hex_val[7];
+
+    for(int i = 0; i < 64;){
+        uint32_t s1 = rotate(e, 6, 1) ^ rotate(e, 11, 1) ^ rotate(e, 25, 1);
+        uint32_t ch = (e & f) ^ ((!e) & g);
+        uint32_t temp1 = h + s1 + ch + round_constants[i] + round_constants[i];
+        uint32_t s0 = rotate(a, 2, 1) ^ rotate(a, 13, 1) ^ rotate(a, 22, 1);
+        uint32_t maj = (a & b) ^ (a & c) ^ (b & c);
+        uint32_t temp2 = s0 + maj;
+
+        h = g;
+        g = f;
+        f = e;
+        e = d + temp1;  
+        d = c;
+        c = b; 
+        b = a;
+        a = temp1 + temp2;
+                
+    }
+            
+    hex_val[0] = hex_val[0] + a;
+    hex_val[1] = hex_val[1] + b;
+    hex_val[2] = hex_val[2] + c;
+    hex_val[3] = hex_val[3] + d;
+    hex_val[4] = hex_val[4] + e;
+    hex_val[5] = hex_val[5] + f;
+    hex_val[6] = hex_val[6] + g;
+    hex_val[7] = hex_val[7] + h;
+
+}
 
 void hash_file(const char *path, char *h_buffer, size_t h_size)
 {
+    //Initialize hash values:
+    uint32_t hex_val[8] = {
+        0x6a09e667,
+        0xbb67ae85,
+        0x3c6ef372,
+        0xa54ff53a,
+        0x510e527f,
+        0x9b05688c,
+        0x1f83d9ab,
+        0x5be0cd19
+    };
+
+    uint32_t round_constants[64] = {
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+    };
+
+
+
     //pre-processing - chunks of 512
     FILE *f_stream = fopen(path, "ab");
 
     if(f_stream == NULL){
-        perror("Error opening file");
+        perror("Error opening file\n");
         return;
     }
 
-    uint8_t schedule_array[CHUNK_SIZE] = {0};
+    uint8_t chunk_512[CHUNK_SIZE] = {0};
     size_t bytes_read;
     
-    while((bytes_read == fread(schedule_array, 1, CHUNK_SIZE, f_stream)) > 0){
+    while((bytes_read == fread(chunk_512, 1, CHUNK_SIZE, f_stream)) > 0){
 
         if(bytes_read == CHUNK_SIZE){
-            printf("hashing dis bih");
-        }else{
-
+            printf("hashing dis bih\n");
+            process_message(hex_val, round_constants, chunk_512);		
         }
-        
+        else{
+            printf("In the final chunk\n");
+            //Pad it first then process
+            
+            //process now
+            process_message(hex_val, round_constants, chunk_512);		
+        }
+        //append the hex values for final hash
+        for(int i = 0; i < 8; i++){
+            snprintf(h_buffer, h_size, "%c", hex_val[i]);        
+        }
     }
 
     fclose(f_stream);
    
 }
-
 
 void add(const char *file_path)
 {
@@ -136,13 +218,6 @@ void add(const char *file_path)
         printf("name: %s\n", parts.filename);
         printf("hash: %s\n", parts.hash);
 
-        //we always add using reltaive filepaths (. would mean recursively grabbing each file in the working dir and checking them
-
-        if(strcmp(file_path, parts.filename) == 0){
-            //The file is in the index, so we just exit
-            printf("Exiting cause we got it in the index\n");
-            return;
-        }
     
     }
 
@@ -150,7 +225,7 @@ void add(const char *file_path)
 
     //file not in index
     //proceed with hashing, updating index and storing in object store
-    char hash_buffer[512];
+    char hash_buffer[64];
     hash_file(file_path, hash_buffer, sizeof(hash_buffer));
 
 
@@ -283,6 +358,7 @@ void init()
     snprintf(HEAD_path, sizeof(HEAD_path), "%s/%s", mgit_dir, "HEAD");
     make_file(HEAD_path, "ref: refs/heads/main");
 
+
     snprintf(heads_dir, sizeof(heads_dir), "%s/heads", refs_dir);
     make_dir(heads_dir);
 
@@ -343,5 +419,5 @@ int main(int argc, char *argv[]){
     if(argc > 1){
         parse_args(argv[1], argv[2]);
     }
-    
-}
+
+}    
