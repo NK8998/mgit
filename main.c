@@ -33,13 +33,15 @@ void commit()
 
 }
  
-uint32_t rotate(uint32_t word_32_bit, int n, int direction){
-    //right
+static inline int32_t rotate(uint32_t word_32_bit, int n, int direction){
+    n = n % 32;
+    if(n == 0) return word_32_bit;
+    
     if(direction){    
-        return word_32_bit >> n | word_32_bit << (32 - n);
+        return (word_32_bit >> n) | (word_32_bit << (32 - n));
     }else{
         
-        return word_32_bit << n | word_32_bit >> (32 - n);
+        return (word_32_bit << n) | (word_32_bit >> (32 - n));
 
     }    
 }
@@ -59,7 +61,7 @@ void process_message(uint32_t hex_val[8], uint32_t round_constants[64], uint8_t 
     }
 		    
     for(int i = 16; i < 64; i++){     
-        uint32_t s0 =  rotate(schedule_array[i - 15], 7, 1) ^  rotate(schedule_array[i - 15], 18, 1) ^ schedule_array[1 - 15] >> 3;
+        uint32_t s0 =  rotate(schedule_array[i - 15], 7, 1) ^  rotate(schedule_array[i - 15], 18, 1) ^ schedule_array[i - 15] >> 3;
         uint32_t s1 =  rotate(schedule_array[i - 2], 17, 1) ^ rotate(schedule_array[i - 2], 19, 1) ^  schedule_array[i - 2] >> 10;
         schedule_array[i] = schedule_array[i - 16] + s0 + round_constants[i - 7] + s1;  
                   
@@ -77,8 +79,8 @@ void process_message(uint32_t hex_val[8], uint32_t round_constants[64], uint8_t 
 
     for(int i = 0; i < 64; i++){
         uint32_t s1 = rotate(e, 6, 1) ^ rotate(e, 11, 1) ^ rotate(e, 25, 1);
-        uint32_t ch = (e & f) ^ ((!e) & g);
-        uint32_t temp1 = h + s1 + ch + round_constants[i] + round_constants[i];
+        uint32_t ch = (e & f) ^ ((~e) & g);
+        uint32_t temp1 = h + s1 + ch + round_constants[i] + schedule_array[i];
         uint32_t s0 = rotate(a, 2, 1) ^ rotate(a, 13, 1) ^ rotate(a, 22, 1);
         uint32_t maj = (a & b) ^ (a & c) ^ (b & c);
         uint32_t temp2 = s0 + maj;
@@ -213,7 +215,7 @@ void hash_file(const char *path, char *h_buffer, size_t h_size)
         }
         //append the hex values for final hash
         for(int i = 0; i < 8; i++){
-            snprintf(h_buffer + i * 8, h_size - i * 8, "%08x", hex_val[i]);        
+            snprintf(h_buffer + (i * 8), h_size - (i * 8), "%08x", hex_val[i]);        
         }
 
     }
@@ -281,7 +283,7 @@ void add(const char *file_path)
 
     //file not in index
     //proceed with hashing, updating index and storing in object store
-    char hash_buffer[64];
+    char hash_buffer[65];
     hash_file(file_path, hash_buffer, sizeof(hash_buffer));
 
     printf("Hash:%s\n", hash_buffer);
