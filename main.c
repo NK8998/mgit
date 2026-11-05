@@ -33,7 +33,7 @@ void commit()
 
 }
  
-static inline int32_t rotate(uint32_t word_32_bit, int n, int direction){
+static inline uint32_t rotate(uint32_t word_32_bit, int n, int direction){
     n = n % 32;
     if(n == 0) return word_32_bit;
     
@@ -51,7 +51,7 @@ void process_message(uint32_t hex_val[8], uint32_t round_constants[64], uint8_t 
     uint32_t schedule_array[CHUNK_SIZE] = {0};
     int k = 0;
     for(int i = 0; i < CHUNK_SIZE;){
-        //Ensure little endian
+        //Ensure Big endian
         schedule_array[k] = ((uint32_t)chunk_512[i] << 24) |
                                     ((uint32_t)chunk_512[i + 1] << 16) | 
                                     ((uint32_t)chunk_512[i + 2] << 8) | 
@@ -63,7 +63,7 @@ void process_message(uint32_t hex_val[8], uint32_t round_constants[64], uint8_t 
     for(int i = 16; i < 64; i++){     
         uint32_t s0 =  rotate(schedule_array[i - 15], 7, 1) ^  rotate(schedule_array[i - 15], 18, 1) ^ schedule_array[i - 15] >> 3;
         uint32_t s1 =  rotate(schedule_array[i - 2], 17, 1) ^ rotate(schedule_array[i - 2], 19, 1) ^  schedule_array[i - 2] >> 10;
-        schedule_array[i] = schedule_array[i - 16] + s0 + round_constants[i - 7] + s1;  
+        schedule_array[i] = schedule_array[i - 16] + s0 + schedule_array[i - 7] + s1;  
                   
     } 
 
@@ -140,88 +140,44 @@ void hash_file(const char *path, char *h_buffer, size_t h_size)
 
     if(f_stream == NULL){
         perror("Error opening file\n");
+        if(h_size) h_buffer[0] = '\0';
         return;
     }
     
-    uint64_t total_bytes_hashed = 0;
+    uint64_t total_bytes = 0;
     uint8_t chunk_512[CHUNK_SIZE] = {0};
     size_t bytes_read;
    
      
-    while((bytes_read = fread(chunk_512, 1, CHUNK_SIZE, f_stream)) > 0){
+    while((bytes_read = fread(chunk_512, 1, CHUNK_SIZE, f_stream)) == 64){
+        total_bytes += 64;
+        process_message(hex_val, round_constants, chunk_512);		
+    } 
+    total_bytes += bytes_read;
+    
+    //Pad it first then process
+    chunk_512[bytes_read] = 0x80;
+    memset(chunk_512 + bytes_read + 1, 0, 64 - bytes_read - 1);
 
-        total_bytes_hashed += bytes_read;
-       
-         if(bytes_read == CHUNK_SIZE){
-            process_message(hex_val, round_constants, chunk_512);		
-        }
-        else{
-            //Pad it first then process
-            chunk_512[bytes_read] = 0x80;
-           
-            //Ensure if we pad we never exced 512
-            if(bytes_read < 56){
-                //append 1 bit
-                
-                //append K '0' bits
-                for(size_t i = bytes_read + 1; i < 56; i++){
-                    chunk_512[i] = 0x00;
-                } 
-        
-                //append total message as a 64-bit big endian integer
-                uint64_t total_bits = (uint64_t)total_bytes_hashed * 8;
-                chunk_512[56] = (total_bits >> 56) & 0xFF; 
-                chunk_512[57] = (total_bits >> 48) & 0xFF; 
-                chunk_512[58] = (total_bits >> 40) & 0xFF; 
-                chunk_512[59] = (total_bits >> 32) & 0xFF; 
-                chunk_512[60] = (total_bits >> 24) & 0xFF; 
-                chunk_512[61] = (total_bits >> 16) & 0xFF; 
-                chunk_512[62] = (total_bits >> 8) & 0xFF; 
-                chunk_512[63] = (total_bits) & 0xFF; 
+    if(bytes_read >= 56){
+        process_message(hex_val, round_constants, chunk_512);		
+        memset(chunk_512, 0, 64);
+     }
 
-                //process now
-                process_message(hex_val, round_constants, chunk_512);		
-             }else {
-                //Not enough room so we fill remaining chunk with 0s first
-                
-                 //append K '0' bits
-                for(size_t i = bytes_read + 1; i < 64; i++){
-                    chunk_512[i] = 0x00;
-                }
-                
-                //Now process the filled block
-                process_message(hex_val, round_constants, chunk_512);
-                
-                //prepare a fresh block that is zeroed out
-                 for(size_t i = 0; i < 56; i++){
-                    chunk_512[i] = 0x00;
-                } 
-                
-                //append total message as a 64-bit big endian integer
-                uint64_t total_bits = (uint64_t)total_bytes_hashed * 8;
-                chunk_512[56] = (total_bits >> 56) & 0xFF; 
-                chunk_512[57] = (total_bits >> 48) & 0xFF; 
-                chunk_512[58] = (total_bits >> 40) & 0xFF; 
-                chunk_512[59] = (total_bits >> 32) & 0xFF; 
-                chunk_512[60] = (total_bits >> 24) & 0xFF; 
-                chunk_512[61] = (total_bits >> 16) & 0xFF; 
-                chunk_512[62] = (total_bits >> 8) & 0xFF; 
-                chunk_512[63] = (total_bits) & 0xFF; 
-                
-                //Process final overflow block
-                process_message(hex_val, round_constants, chunk_512);
-               
-            }
-        }
-        //append the hex values for final hash
-        for(int i = 0; i < 8; i++){
-            snprintf(h_buffer + (i * 8), h_size - (i * 8), "%08x", hex_val[i]);        
-        }
-
+    uint64_t total_bits = total_bytes * 8;
+    for(int i = 0; i < 8; i++){
+        chunk_512[56 + i] = (total_bits >> (56 - 8 * i)) & 0xFF;
     }
     
+    process_message(hex_val, round_constants, chunk_512);		
+    
     fclose(f_stream);
-   
+      
+    //append the hex values for final hash
+    for(int i = 0; i < 8; i++){
+        snprintf(h_buffer + (i * 8), h_size - (i * 8), "%08x", hex_val[i]);        
+    }
+
 }
 
 void add(const char *file_path)
@@ -285,8 +241,8 @@ void add(const char *file_path)
     //proceed with hashing, updating index and storing in object store
     char hash_buffer[65];
     hash_file(file_path, hash_buffer, sizeof(hash_buffer));
-
-    printf("Hash:%s\n", hash_buffer);
+    
+    printf("Hash: | %s | with length: %lu\n", hash_buffer, strlen(hash_buffer));
     fclose(f_stream);
   
        
