@@ -243,6 +243,7 @@ void add(const char *file_path)
     hash_file(file_path, hash_buffer, sizeof(hash_buffer));
     
     printf("Hash: | %s | with length: %lu\n", hash_buffer, strlen(hash_buffer));
+
     fclose(f_stream);
   
        
